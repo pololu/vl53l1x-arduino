@@ -1278,6 +1278,9 @@ class VL53L1X
 
     bool performSingleRefCalibration(uint8_t vhv_init_byte);
 
+    void setupManualCalibration();
+    void updateDSS();
+
     static uint16_t encodeTimeout(uint32_t timeout_mclks);
     static uint32_t timeoutMicrosecondsToMclks(uint32_t timeout_us, uint32_t macro_period_us);
     uint32_t calcMacroPeriod(uint8_t vcsel_period);

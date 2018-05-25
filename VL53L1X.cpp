@@ -8,10 +8,6 @@
 
 // Defines /////////////////////////////////////////////////////////////////////
 
-// The Arduino two-wire interface uses a 7-bit number for the address,
-// and sets the last bit correctly based on reads and writes
-#define ADDRESS_DEFAULT 0b0101001
-
 // Record the current time to check an upcoming timeout against
 #define startTimeout() (timeout_start_ms = millis())
 
@@ -19,10 +15,20 @@
 #define checkTimeoutExpired() \
   (io_timeout > 0 && ((uint16_t)millis() - timeout_start_ms) > io_timeout)
 
+// Constants ///////////////////////////////////////////////////////////////////
+
+// The Arduino two-wire interface uses a 7-bit number for the address,
+// and sets the last bit correctly based on reads and writes
+static const uint8_t AddressDefault = 0b0101001;
+
+// value in DSS_CONFIG__TARGET_TOTAL_RATE_MCPS register, used in DSS
+// calculations
+static const uint16_t TargetRate = 0x0A00;
+
 // Constructors ////////////////////////////////////////////////////////////////
 
 VL53L1X::VL53L1X(void)
-  : address(ADDRESS_DEFAULT)
+  : address(AddressDefault)
   , io_timeout(0) // no timeout
   , did_timeout(false)
   , calibrated(false)
@@ -98,6 +104,7 @@ bool VL53L1X::init(bool io_2v8)
   // static config
   // API resets PAD_I2C_HV__EXTSUP_CONFIG here, but maybe we don't want to do
   // that? (seems like it should disable 2V8 mode)
+  writeReg16Bit(DSS_CONFIG__TARGET_TOTAL_RATE_MCPS, TargetRate); // should already be this value after reset
   writeReg(GPIO__TIO_HV_STATUS, 0x02);
   writeReg(SIGMA_ESTIMATOR__EFFECTIVE_PULSE_WIDTH_NS, 8); // tuning parm default
   writeReg(SIGMA_ESTIMATOR__EFFECTIVE_AMBIENT_WIDTH_NS, 16); // tuning parm default
@@ -118,6 +125,7 @@ bool VL53L1X::init(bool io_2v8)
   writeReg16Bit(RANGE_CONFIG__MIN_COUNT_RATE_RTN_LIMIT_MCPS, 192); // tuning parm default
 
   // dynamic config
+
   writeReg(SYSTEM__GROUPED_PARAMETER_HOLD_0, 0x01);
   writeReg(SYSTEM__GROUPED_PARAMETER_HOLD_1, 0x01);
   writeReg(SD_CONFIG__QUANTIFIER, 2); // tuning parm default
@@ -125,6 +133,9 @@ bool VL53L1X::init(bool io_2v8)
   // VL53L1_preset_mode_standard_ranging() end
 
   // from VL53L1_preset_mode_timed_ranging_*
+  // GPH is 0 after reset, but writing GPH0 and GPH1 above seem to set GPH to 1,
+  // and things don't seem to work if we don't set GPH back to 0 (which the API
+  // does here).
   writeReg(SYSTEM__GROUPED_PARAMETER_HOLD, 0x00);
   writeReg(SYSTEM__SEED_CONFIG, 1); // tuning parm default
 
@@ -668,7 +679,7 @@ void VL53L1X::startContinuous(uint32_t period_ms)
 {
   // from VL53L1_set_inter_measurement_period_ms()
   writeReg32Bit(SYSTEM__INTERMEASUREMENT_PERIOD, period_ms * osc_calibrate_val);
-  
+
   /*writeReg(POWER_MANAGEMENT__GO1_POWER_FORCE, 0x00);
   writeReg(SYSTEM__STREAM_COUNT_CTRL, 0x00);
   writeReg(FIRMWARE__ENABLE, 0x01);*/
@@ -709,42 +720,25 @@ uint16_t VL53L1X::readRangeContinuousMillimeters(void)
 
   if (!calibrated)
   {
-    //"     * Setup ranges after the first one in low power auto mode by turning
-      //* off FW calibration steps and programming static values"
-    // VL53L1_low_power_auto_setup_manual_calibration() begin
-
-    // "save original vhv configs"
-    saved_vhv_init = readReg(VHV_CONFIG__INIT);
-    saved_vhv_timeout = readReg(VHV_CONFIG__TIMEOUT_MACROP_LOOP_BOUND);
-
-    // "disable VHV init"
-    writeReg(VHV_CONFIG__INIT, saved_vhv_init & 0x7F);
-
-    // "set loop bound to tuning param"
-    writeReg(VHV_CONFIG__TIMEOUT_MACROP_LOOP_BOUND,
-      (saved_vhv_timeout & 0x03) + (3 << 2)); // tuning parm default (LOWPOWERAUTO_VHV_LOOP_BOUND_DEFAULT)
-
-    // "override phasecal"
-    writeReg(PHASECAL_CONFIG__OVERRIDE, 0x01);
-    //writeReg(CAL_CONFIG__VCSEL_START, readReg(PHASECAL_RESULT__VCSEL_START)); FIXME
-
-    // VL53L1_low_power_auto_setup_manual_calibration() end
-
+    setupManualCalibration();
     calibrated = true;
   }
 
-  // The API does a DSS (dynamic SPAD selection) calculation/update here;
-  // currently not implemented in this library.
+  updateDSS();
 
-  // assumptions: Linearity Corrective Gain is 1000 (default);
-  // fractional ranging is not enabled
+  // VL53L1_copy_sys_and_core_results_to_range_results() begin
+
   uint16_t range = readReg16Bit(RESULT__FINAL_CROSSTALK_CORRECTED_RANGE_MM_SD0);
-  
-  /*writeReg(POWER_MANAGEMENT__GO1_POWER_FORCE, 0x00);
-  writeReg(SYSTEM__STREAM_COUNT_CTRL, 0x00);
-  writeReg(FIRMWARE__ENABLE, 0x01);*/
+
+  // "apply correction gain"
+  // gain factor of 2011 is tuning parm default (VL53L1_TUNINGPARM_LITE_RANGING_GAIN_FACTOR_DEFAULT)
+  // Basically, this appears to scale the result by 2011/2048, or about 98%
+  // (with the 1024 added for proper rounding).
+  range = ((uint32_t)range * 2011 + 0x0400) / 0x0800;
+
+  // VL53L1_copy_sys_and_core_results_to_range_results() end
+
   writeReg(SYSTEM__INTERRUPT_CLEAR, 0x01); // sys_interrupt_clear_range
-  writeReg(SYSTEM__MODE_START, 0x40); // mode_range__timed ????
 
   return range;
 }
@@ -860,6 +854,73 @@ bool VL53L1X::timeoutOccurred()
     timeoutMclksToMicroseconds(timeouts->final_range_mclks,
                                timeouts->final_range_vcsel_period_pclks);
 }*/
+
+// "Setup ranges after the first one in low power auto mode by turning off
+// FW calibration steps and programming static values"
+// based on VL53L1_low_power_auto_setup_manual_calibration()
+void VL53L1X::setupManualCalibration()
+{
+  // "save original vhv configs"
+  saved_vhv_init = readReg(VHV_CONFIG__INIT);
+  saved_vhv_timeout = readReg(VHV_CONFIG__TIMEOUT_MACROP_LOOP_BOUND);
+
+  // "disable VHV init"
+  writeReg(VHV_CONFIG__INIT, saved_vhv_init & 0x7F);
+
+  // "set loop bound to tuning param"
+  writeReg(VHV_CONFIG__TIMEOUT_MACROP_LOOP_BOUND,
+    (saved_vhv_timeout & 0x03) + (3 << 2)); // tuning parm default (LOWPOWERAUTO_VHV_LOOP_BOUND_DEFAULT)
+
+  // "override phasecal"
+  writeReg(PHASECAL_CONFIG__OVERRIDE, 0x01);
+  writeReg(CAL_CONFIG__VCSEL_START, readReg(PHASECAL_RESULT__VCSEL_START));
+}
+
+// perform Dynamic SPAD Selection calculation/update
+// based on VL53L1_low_power_auto_update_DSS()
+void VL53L1X::updateDSS()
+{
+  uint16_t spadCount = readReg16Bit(RESULT__DSS_ACTUAL_EFFECTIVE_SPADS_SD0);
+
+  if (spadCount != 0)
+  {
+    // "Calc total rate per spad"
+
+    uint32_t totalRatePerSpad =
+      (uint32_t)readReg16Bit(RESULT__PEAK_SIGNAL_COUNT_RATE_CROSSTALK_CORRECTED_MCPS_SD0) +
+      readReg16Bit(RESULT__AMBIENT_COUNT_RATE_MCPS_SD0);
+
+    // "clip to 16 bits"
+    if (totalRatePerSpad > 0xFFFF) { totalRatePerSpad = 0xFFFF; }
+
+    // "shift up to take advantage of 32 bits"
+    totalRatePerSpad <<= 16;
+
+    totalRatePerSpad /= spadCount;
+
+    if (totalRatePerSpad != 0)
+    {
+      // "get the target rate and shift up by 16"
+      uint32_t requiredSpads = ((uint32_t)TargetRate << 16) / totalRatePerSpad;
+
+      // "clip to 16 bit"
+      if (requiredSpads > 0xFFFF) { requiredSpads = 0xFFFF; }
+
+      // "override DSS config"
+      writeReg16Bit(DSS_CONFIG__MANUAL_EFFECTIVE_SPADS_SELECT, requiredSpads);
+      // DSS_CONFIG__ROI_MODE_CONTROL should already be set to REQUESTED_EFFFECTIVE_SPADS
+
+      return;
+    }
+  }
+
+  // If we reached this point, it means something above would have resulted in a
+  // divide by zero.
+  // "We want to gracefully set a spad target, not just exit with an error"
+
+   // "set target to mid point"
+   writeReg16Bit(DSS_CONFIG__MANUAL_EFFECTIVE_SPADS_SELECT, 0x8000);
+}
 
 // Decode sequence step timeout in MCLKs from register value
 // based on VL53L0X_decode_timeout()
