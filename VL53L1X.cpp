@@ -15,15 +15,9 @@
 #define checkTimeoutExpired() \
   (io_timeout > 0 && ((uint16_t)millis() - timeout_start_ms) > io_timeout)
 
-// Constants ///////////////////////////////////////////////////////////////////
-
-// The Arduino two-wire interface uses a 7-bit number for the address,
-// and sets the last bit correctly based on reads and writes
-static const uint8_t AddressDefault = 0b0101001;
-
-// value in DSS_CONFIG__TARGET_TOTAL_RATE_MCPS register, used in DSS
-// calculations
-static const uint16_t TargetRate = 0x0A00;
+// Convert count rate from fixed point 9.7 format to float
+#define countRateFixedToFloat(count_rate_fixed) \
+  (float)(count_rate_fixed) / (1 << 7)
 
 // Constructors ////////////////////////////////////////////////////////////////
 
@@ -197,7 +191,7 @@ void VL53L1X::writeReg32Bit(uint16_t reg, uint32_t value)
 }
 
 // Read an 8-bit register
-uint8_t VL53L1X::readReg(uint16_t reg)
+uint8_t VL53L1X::readReg(regAddr reg)
 {
   uint8_t value;
 
@@ -230,12 +224,13 @@ uint16_t VL53L1X::readReg16Bit(uint16_t reg)
 }
 
 // Read a 32-bit register
-/*uint32_t VL53L1X::readReg32Bit(uint8_t reg)
+uint32_t VL53L1X::readReg32Bit(uint16_t reg)
 {
   uint32_t value;
 
   Wire.beginTransmission(address);
-  Wire.write(reg);
+  Wire.write((reg >> 8) & 0xFF); // reg high byte
+  Wire.write( reg       & 0xFF); // reg low byte
   last_status = Wire.endTransmission();
 
   Wire.requestFrom(address, (uint8_t)4);
@@ -245,31 +240,40 @@ uint16_t VL53L1X::readReg16Bit(uint16_t reg)
   value |=           Wire.read();       // value lowest byte
 
   return value;
-}*/
+}
 
-// Write an arbitrary number of bytes from the given array to the sensor,
-// starting at the given register
-/*void VL53L1X::writeMulti(uint8_t reg, uint8_t const * src, uint8_t count)
+/*// Write an arbitrary number of bytes (max 30) from the given array to the
+// sensor, starting at the given register
+// Write count is limited by size of buffer in Wire library (32 bytes - 2 for
+// register index). Larger amounts could be written by writing 30 bytes at a
+// time, but this library doesn't need that capability at this time. (This
+// function is actually not used anywhere else in the library and is only
+// provided for convenience.)
+void VL53L1X::writeMulti(uint16_t reg, uint8_t const * src, uint8_t count)
 {
   Wire.beginTransmission(address);
-  Wire.write(reg);
+  Wire.write((reg >> 8) & 0xFF); // reg high byte
+  Wire.write( reg       & 0xFF); // reg low byte
 
-  while (count-- > 0)
-  {
-    Wire.write(*(src++));
-  }
+  if (count > 30) { count = 30; }
+  Wire.write(src, count);
 
   last_status = Wire.endTransmission();
-}*/
+}
 
-// Read an arbitrary number of bytes from the sensor, starting at the given
-// register, into the given array
-/*void VL53L1X::readMulti(uint8_t reg, uint8_t * dst, uint8_t count)
+// Read an arbitrary number of bytes (max 32) from the sensor, starting at the
+// given register, into the given array
+// Read count is limited by size of buffer in Wire library (32 bytes). Larger
+// amounts could be read by reading 32 bytes at a time, but this library
+// doesn't need that capability at this time.
+void VL53L1X::readMulti(uint16_t reg, uint8_t * dst, uint8_t count)
 {
   Wire.beginTransmission(address);
-  Wire.write(reg);
+  Wire.write((reg >> 8) & 0xFF); // reg high byte
+  Wire.write( reg       & 0xFF); // reg low byte
   last_status = Wire.endTransmission();
 
+  if (count > 32) { count = 32; }
   Wire.requestFrom(address, count);
 
   while (count-- > 0)
@@ -301,7 +305,7 @@ uint16_t VL53L1X::readReg16Bit(uint16_t reg)
   return (float)readReg16Bit(FINAL_RANGE_CONFIG_MIN_COUNT_RATE_RTN_LIMIT) / (1 << 7);
 }*/
 
-bool VL53L1X::setDistanceMode(distanceMode mode)
+bool VL53L1X::setDistanceMode(DistanceMode mode)
 {
   switch (mode)
   {
@@ -705,7 +709,7 @@ void VL53L1X::startContinuous(uint32_t period_ms)
 // Returns a range reading in millimeters when continuous mode is active
 // (readRangeSingleMillimeters() also calls this function after starting a
 // single-shot range measurement)
-uint16_t VL53L1X::readRangeContinuousMillimeters(void)
+uint16_t VL53L1X::readRangeContinuousMillimeters(RangingDetails * details)
 {
   startTimeout();
   // assumes interrupt is active low (GPIO_HV_MUX__CTRL bit 4 is 1)
@@ -714,9 +718,12 @@ uint16_t VL53L1X::readRangeContinuousMillimeters(void)
     if (checkTimeoutExpired())
     {
       did_timeout = true;
+      if (details != NULL) { details->range_status = None; }
       return 65535;
     }
   }
+
+  readResults();
 
   if (!calibrated)
   {
@@ -728,7 +735,7 @@ uint16_t VL53L1X::readRangeContinuousMillimeters(void)
 
   // VL53L1_copy_sys_and_core_results_to_range_results() begin
 
-  uint16_t range = readReg16Bit(RESULT__FINAL_CROSSTALK_CORRECTED_RANGE_MM_SD0);
+  uint16_t range = results.final_crosstalk_corrected_range_mm_sd0;
 
   // "apply correction gain"
   // gain factor of 2011 is tuning parm default (VL53L1_TUNINGPARM_LITE_RANGING_GAIN_FACTOR_DEFAULT)
@@ -737,6 +744,8 @@ uint16_t VL53L1X::readRangeContinuousMillimeters(void)
   range = ((uint32_t)range * 2011 + 0x0400) / 0x0800;
 
   // VL53L1_copy_sys_and_core_results_to_range_results() end
+
+  if (details != NULL) { getRangingDetails(details); }
 
   writeReg(SYSTEM__INTERRUPT_CLEAR, 0x01); // sys_interrupt_clear_range
 
@@ -876,19 +885,57 @@ void VL53L1X::setupManualCalibration()
   writeReg(CAL_CONFIG__VCSEL_START, readReg(PHASECAL_RESULT__VCSEL_START));
 }
 
+void VL53L1X::readResults()
+{
+  Wire.beginTransmission(address);
+  Wire.write((RESULT__RANGE_STATUS >> 8) & 0xFF); // reg high byte
+  Wire.write( RESULT__RANGE_STATUS       & 0xFF); // reg low byte
+  last_status = Wire.endTransmission();
+
+  Wire.requestFrom(address, (uint8_t)17);
+
+  results.range_status = Wire.read();
+
+  Wire.read(); // report_status: not used
+
+  results.stream_count = Wire.read();
+
+  results.dss_actual_effective_spads_sd0  = (uint16_t)Wire.read() << 8; // high byte
+  results.dss_actual_effective_spads_sd0 |=           Wire.read();      // low byte
+
+  Wire.read(); // peak_signal_count_rate_mcps_sd0: not used
+  Wire.read();
+
+  results.ambient_count_rate_mcps_sd0  = (uint16_t)Wire.read() << 8; // high byte
+  results.ambient_count_rate_mcps_sd0 |=           Wire.read();      // low byte
+
+  Wire.read(); // sigma_sd0: not used
+  Wire.read();
+
+  Wire.read(); // phase_sd0: not used
+  Wire.read();
+
+  results.final_crosstalk_corrected_range_mm_sd0  = (uint16_t)Wire.read() << 8; // high byte
+  results.final_crosstalk_corrected_range_mm_sd0 |=           Wire.read();      // low byte
+
+  results.peak_signal_count_rate_crosstalk_corrected_mcps_sd0  = (uint16_t)Wire.read() << 8; // high byte
+  results.peak_signal_count_rate_crosstalk_corrected_mcps_sd0 |=           Wire.read();      // low byte
+}
+
+
 // perform Dynamic SPAD Selection calculation/update
 // based on VL53L1_low_power_auto_update_DSS()
 void VL53L1X::updateDSS()
 {
-  uint16_t spadCount = readReg16Bit(RESULT__DSS_ACTUAL_EFFECTIVE_SPADS_SD0);
+  uint16_t spadCount = results.dss_actual_effective_spads_sd0;
 
   if (spadCount != 0)
   {
     // "Calc total rate per spad"
 
     uint32_t totalRatePerSpad =
-      (uint32_t)readReg16Bit(RESULT__PEAK_SIGNAL_COUNT_RATE_CROSSTALK_CORRECTED_MCPS_SD0) +
-      readReg16Bit(RESULT__AMBIENT_COUNT_RATE_MCPS_SD0);
+      (uint32_t)results.peak_signal_count_rate_crosstalk_corrected_mcps_sd0 +
+      results.ambient_count_rate_mcps_sd0;
 
     // "clip to 16 bits"
     if (totalRatePerSpad > 0xFFFF) { totalRatePerSpad = 0xFFFF; }
@@ -920,6 +967,76 @@ void VL53L1X::updateDSS()
 
    // "set target to mid point"
    writeReg16Bit(DSS_CONFIG__MANUAL_EFFECTIVE_SPADS_SELECT, 0x8000);
+}
+
+void VL53L1X::getRangingDetails(RangingDetails * details)
+{
+  // set range_status in details based on value of RESULT__RANGE_STATUS register
+  // mostly based on ConvertStatusLite()
+  switch(results.range_status)
+  {
+    case 17: // MULTCLIPFAIL
+    case 2: // VCSELWATCHDOGTESTFAILURE
+    case 1: // VCSELCONTINUITYTESTFAILURE
+    case 3: // NOVHVVALUEFOUND
+      // from SetSimpleData()
+      details->range_status = HardwareFail;
+      break;
+
+    case 13: // USERROICLIP
+     // from SetSimpleData()
+      details->range_status = MinRangeFail;
+      break;
+
+    case 18: // GPHSTREAMCOUNT0READY
+      details->range_status = SyncronisationInt;
+      break;
+
+    case 5: // RANGEPHASECHECK
+      details->range_status =  OutOfBoundsFail;
+      break;
+
+    case 4: // MSRCNOTARGET
+      details->range_status = SignalFail;
+      break;
+
+    case 6: // SIGMATHRESHOLDCHECK
+      details->range_status = SignalFail;
+      break;
+
+    case 7: // PHASECONSISTENCY
+      details->range_status = WrapTargetFail;
+      break;
+
+    case 12: // RANGEIGNORETHRESHOLD
+      details->range_status = XTalkSignalFail;
+      break;
+
+    case 8: // MINCLIP
+      details->range_status = RangeValidMinRangeClipped;
+      break;
+
+    case 9: // RANGECOMPLETE
+      // from VL53L1_copy_sys_and_core_results_to_range_results()
+      if (results.stream_count == 0)
+      {
+        details->range_status = RangeValidNoWrapCheckFail;
+      }
+      else
+      {
+        details->range_status = RangeValid;
+      }
+      break;
+
+    default:
+      details->range_status = None;
+  }
+
+  // from SetSimpleData()
+  details->peak_signal_count_rate_MCPS =
+    countRateFixedToFloat(results.peak_signal_count_rate_crosstalk_corrected_mcps_sd0);
+  details->ambient_count_rate_MCPS =
+    countRateFixedToFloat(results.ambient_count_rate_mcps_sd0);
 }
 
 // Decode sequence step timeout in MCLKs from register value

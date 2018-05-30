@@ -5,8 +5,9 @@
 class VL53L1X
 {
   public:
+
     // register addresses from API vl53l1x_register_map.h
-    enum regAddr
+    enum regAddr : uint16_t
     {
       SOFT_RESET                                                                 = 0x0000,
       I2C_SLAVE__DEVICE_ADDRESS                                                  = 0x0001,
@@ -1196,7 +1197,73 @@ class VL53L1X
       SHADOW_PHASECAL_RESULT__REFERENCE_PHASE_LO                                 = 0x0FFF,
     };
 
-    enum distanceMode { Short, Medium, Long };
+    enum DistanceMode { Short, Medium, Long };
+
+    enum RangeStatus : uint8_t
+    {
+      RangeValid                =   0,
+
+      // "sigma estimator check is above the internal defined threshold"
+      // (sigma = standard deviation of measurement)
+      SigmaFail                 =   1,
+
+      // "signal value is below the internal defined threshold"
+      SignalFail                =   2,
+
+      // "Target is below minimum detection threshold."
+      RangeValidMinRangeClipped =   3,
+
+      // "phase is out of bounds"
+      // (nothing detected in range; try a longer distance mode if applicable)
+      OutOfBoundsFail           =   4,
+
+      // "HW or VCSEL failure"
+      HardwareFail              =   5,
+
+      // "The Range is valid but the wraparound check has not been done."
+      RangeValidNoWrapCheckFail =   6,
+
+      // "Wrapped target, not matching phases"
+      // "no matching phase in other VCSEL period timing."
+      WrapTargetFail            =   7,
+
+      // "Internal algo underflow or overflow in lite ranging."
+   // ProcessingFail            =   8: not used in API
+
+      // "Specific to lite ranging."
+      // should never occur with this lib (which uses low power auto ranging,
+      // as the API does)
+      XTalkSignalFail           =   9,
+
+      // "1st interrupt when starting ranging in back to back mode. Ignore
+      // data."
+      // should never occur with this lib
+      SyncronisationInt         =  10, // (this is how it's spelled in the API)
+
+      // "All Range ok but object is result of multiple pulses merging together.
+      // Used by RQL for merged pulse detection"
+   // RangeValid MergedPulse    =  11: not used in API
+
+      // "Used by RQL as different to phase fail."
+   // TargetPresentLackOfSignal =  12:
+
+      // "Target is below minimum detection threshold."
+      MinRangeFail              =  13,
+
+      // "The reported range is invalid"
+   // RangeInvalid              =  14: can't actually be returned by API (range is never negative)
+
+      // "No Update."
+      None                      = 255,
+    };
+
+    struct RangingDetails
+    {
+      RangeStatus range_status;
+      float peak_signal_count_rate_MCPS;
+      float ambient_count_rate_MCPS;
+    };
+
 
     uint8_t last_status; // status of last I2C transmission
 
@@ -1210,17 +1277,17 @@ class VL53L1X
     void writeReg(uint16_t reg, uint8_t value);
     void writeReg16Bit(uint16_t reg, uint16_t value);
     void writeReg32Bit(uint16_t reg, uint32_t value);
-    uint8_t readReg(uint16_t reg);
+    uint8_t readReg(regAddr reg);
     uint16_t readReg16Bit(uint16_t reg);
     uint32_t readReg32Bit(uint16_t reg);
 
-    //void writeMulti(uint8_t reg, uint8_t const * src, uint8_t count);
-    //void readMulti(uint8_t reg, uint8_t * dst, uint8_t count);
+    void writeMulti(uint16_t reg, uint8_t const * src, uint8_t count);
+    void readMulti(uint16_t reg, uint8_t * dst, uint8_t count);
 
     //bool setSignalRateLimit(float limit_Mcps);
     //float getSignalRateLimit(void);
 
-    bool setDistanceMode(distanceMode mode);
+    bool setDistanceMode(DistanceMode mode);
 
     bool setMeasurementTimingBudget(uint32_t budget_us);
     uint32_t getMeasurementTimingBudget(void);
@@ -1230,30 +1297,44 @@ class VL53L1X
 
     void startContinuous(uint32_t period_ms = 0);
     void stopContinuous(void);
-    uint16_t readRangeContinuousMillimeters(void);
-    uint16_t readRangeSingleMillimeters(void);
+    uint16_t readRangeContinuousMillimeters(RangingDetails * details = NULL);
+    //uint16_t readRangeSingleMillimeters(void);
 
     inline void setTimeout(uint16_t timeout) { io_timeout = timeout; }
     inline uint16_t getTimeout(void) { return io_timeout; }
     bool timeoutOccurred(void);
 
   private:
-    // TCC: Target CentreCheck
-    // MSRC: Minimum Signal Rate Check
-    // DSS: Dynamic Spad Selection
 
-    struct SequenceStepEnables
+    // The Arduino two-wire interface uses a 7-bit number for the address,
+    // and sets the last bit correctly based on reads and writes
+    static const uint8_t AddressDefault = 0b0101001;
+
+    // value in DSS_CONFIG__TARGET_TOTAL_RATE_MCPS register, used in DSS
+    // calculations
+    static const uint16_t TargetRate = 0x0A00;
+
+    // for storing values read from RESULT__RANGE_STATUS (0x0089)
+    // through RESULT__PEAK_SIGNAL_COUNT_RATE_CROSSTALK_CORRECTED_MCPS_SD0_LOW
+    // (0x0099)
+    struct ResultBuffer
     {
-      boolean tcc, msrc, dss, pre_range, final_range;
+      uint8_t range_status;
+    // uint8_t report_status: not used
+      uint8_t stream_count;
+      uint16_t dss_actual_effective_spads_sd0;
+   // uint16_t peak_signal_count_rate_mcps_sd0: not used
+      uint16_t ambient_count_rate_mcps_sd0;
+   // uint16_t sigma_sd0: not used
+   // uint16_t phase_sd0: not used
+      uint16_t final_crosstalk_corrected_range_mm_sd0;
+      uint16_t peak_signal_count_rate_crosstalk_corrected_mcps_sd0;
     };
 
-    struct SequenceStepTimeouts
-    {
-      uint16_t pre_range_vcsel_period_pclks, final_range_vcsel_period_pclks;
-
-      uint16_t msrc_dss_tcc_mclks, pre_range_mclks, final_range_mclks;
-      uint32_t msrc_dss_tcc_us,    pre_range_us,    final_range_us;
-    };
+    // making this static would save RAM for multiple instances as long as there
+    // aren't multiple sensors being read at the same time (e.g. on separate
+    // I2C buses)
+    ResultBuffer results;
 
     uint8_t address;
     uint16_t io_timeout;
@@ -1267,19 +1348,20 @@ class VL53L1X
     uint8_t saved_vhv_init;
     uint8_t saved_vhv_timeout;
 
+    //uint8_t stop_variable; // read by init and used when starting measurement; is StopVariable field of VL53L0X_DevData_t structure in API
+    //uint32_t measurement_timing_budget_us;
 
-    uint8_t stop_variable; // read by init and used when starting measurement; is StopVariable field of VL53L0X_DevData_t structure in API
-    uint32_t measurement_timing_budget_us;
+    //bool getSpadInfo(uint8_t * count, bool * type_is_aperture);
 
-    bool getSpadInfo(uint8_t * count, bool * type_is_aperture);
+    //void getSequenceStepEnables(SequenceStepEnables * enables);
+    //void getSequenceStepTimeouts(SequenceStepEnables const * enables, SequenceStepTimeouts * timeouts);
 
-    void getSequenceStepEnables(SequenceStepEnables * enables);
-    void getSequenceStepTimeouts(SequenceStepEnables const * enables, SequenceStepTimeouts * timeouts);
-
-    bool performSingleRefCalibration(uint8_t vhv_init_byte);
+    //bool performSingleRefCalibration(uint8_t vhv_init_byte);
 
     void setupManualCalibration();
+    void readResults();
     void updateDSS();
+    void getRangingDetails(RangingDetails * details);
 
     static uint16_t encodeTimeout(uint32_t timeout_mclks);
     static uint32_t timeoutMicrosecondsToMclks(uint32_t timeout_us, uint32_t macro_period_us);
