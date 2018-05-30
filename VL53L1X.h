@@ -1289,7 +1289,7 @@ class VL53L1X
     bool setMeasurementTimingBudget(uint32_t budget_us);
     uint32_t getMeasurementTimingBudget();
 
-    void startContinuous(uint32_t period_ms = 0);
+    void startContinuous(uint32_t period_ms);
     void stopContinuous();
     uint16_t read();
     inline uint16_t readRangeContinuousMillimeters() { return read(); }

@@ -447,7 +447,9 @@ uint16_t VL53L1X::read()
     {
       did_timeout = true;
       ranging_data.range_status = None;
-      ranging_data.range_mm = 65535;
+      ranging_data.range_mm = 0;
+      ranging_data.peak_signal_count_rate_MCPS = 0;
+      ranging_data.ambient_count_rate_MCPS = 0;
       return ranging_data.range_mm;
     }
   }
