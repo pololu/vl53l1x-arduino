@@ -111,17 +111,17 @@ class VL53L1X
       DSS_CONFIG__APERTURE_ATTENUATION                                           = 0x0057,
       DSS_CONFIG__MAX_SPADS_LIMIT                                                = 0x0058,
       DSS_CONFIG__MIN_SPADS_LIMIT                                                = 0x0059,
-      MM_CONFIG__TIMEOUT_MACROP_A                                                = 0x005A, // added for 16-bit accesses by Pololu
+      MM_CONFIG__TIMEOUT_MACROP_A                                                = 0x005A, // added by Pololu for 16-bit accesses 
       MM_CONFIG__TIMEOUT_MACROP_A_HI                                             = 0x005A,
       MM_CONFIG__TIMEOUT_MACROP_A_LO                                             = 0x005B,
-      MM_CONFIG__TIMEOUT_MACROP_B                                                = 0x005C, // added for 16-bit accesses by Pololu
+      MM_CONFIG__TIMEOUT_MACROP_B                                                = 0x005C, // added by Pololu for 16-bit accesses 
       MM_CONFIG__TIMEOUT_MACROP_B_HI                                             = 0x005C,
       MM_CONFIG__TIMEOUT_MACROP_B_LO                                             = 0x005D,
-      RANGE_CONFIG__TIMEOUT_MACROP_A                                             = 0x005E, // added for 16-bit accesses by Pololu
+      RANGE_CONFIG__TIMEOUT_MACROP_A                                             = 0x005E, // added by Pololu for 16-bit accesses 
       RANGE_CONFIG__TIMEOUT_MACROP_A_HI                                          = 0x005E,
       RANGE_CONFIG__TIMEOUT_MACROP_A_LO                                          = 0x005F,
       RANGE_CONFIG__VCSEL_PERIOD_A                                               = 0x0060,
-      RANGE_CONFIG__TIMEOUT_MACROP_B                                             = 0x0061, // added for 16-bit accesses by Pololu
+      RANGE_CONFIG__TIMEOUT_MACROP_B                                             = 0x0061, // added by Pololu for 16-bit accesses 
       RANGE_CONFIG__TIMEOUT_MACROP_B_HI                                          = 0x0061,
       RANGE_CONFIG__TIMEOUT_MACROP_B_LO                                          = 0x0062,
       RANGE_CONFIG__VCSEL_PERIOD_B                                               = 0x0063,
@@ -1197,7 +1197,7 @@ class VL53L1X
       SHADOW_PHASECAL_RESULT__REFERENCE_PHASE_LO                                 = 0x0FFF,
     };
 
-    enum DistanceMode { Short, Medium, Long };
+    enum DistanceMode { Short, Medium, Long, Unknown };
 
     enum RangeStatus : uint8_t
     {
@@ -1233,7 +1233,7 @@ class VL53L1X
       // "Specific to lite ranging."
       // should never occur with this lib (which uses low power auto ranging,
       // as the API does)
-      XTalkSignalFail           =   9,
+      XtalkSignalFail           =   9,
 
       // "1st interrupt when starting ranging in back to back mode. Ignore
       // data."
@@ -1251,26 +1251,28 @@ class VL53L1X
       MinRangeFail              =  13,
 
       // "The reported range is invalid"
-   // RangeInvalid              =  14: can't actually be returned by API (range is never negative)
+   // RangeInvalid              =  14: can't actually be returned by API (range can never become negative, even after correction)
 
       // "No Update."
       None                      = 255,
     };
 
-    struct RangingDetails
+    struct RangingData
     {
+      uint16_t range_mm;
       RangeStatus range_status;
       float peak_signal_count_rate_MCPS;
       float ambient_count_rate_MCPS;
     };
 
+    RangingData ranging_data;
 
     uint8_t last_status; // status of last I2C transmission
 
-    VL53L1X(void);
+    VL53L1X();
 
     void setAddress(uint8_t new_addr);
-    inline uint8_t getAddress(void) { return address; }
+    inline uint8_t getAddress() { return address; }
 
     bool init(bool io_2v8 = true);
 
@@ -1281,34 +1283,39 @@ class VL53L1X
     uint16_t readReg16Bit(uint16_t reg);
     uint32_t readReg32Bit(uint16_t reg);
 
-    void writeMulti(uint16_t reg, uint8_t const * src, uint8_t count);
-    void readMulti(uint16_t reg, uint8_t * dst, uint8_t count);
-
-    //bool setSignalRateLimit(float limit_Mcps);
-    //float getSignalRateLimit(void);
-
     bool setDistanceMode(DistanceMode mode);
+    DistanceMode getDistanceMode() { return distance_mode; }
 
     bool setMeasurementTimingBudget(uint32_t budget_us);
-    uint32_t getMeasurementTimingBudget(void);
-
-    //bool setVcselPulsePeriod(vcselPeriodType type, uint8_t period_pclks);
-    //uint8_t getVcselPulsePeriod(vcselPeriodType type);
+    uint32_t getMeasurementTimingBudget();
 
     void startContinuous(uint32_t period_ms = 0);
-    void stopContinuous(void);
-    uint16_t readRangeContinuousMillimeters(RangingDetails * details = NULL);
-    //uint16_t readRangeSingleMillimeters(void);
+    void stopContinuous();
+    uint16_t read();
+    inline uint16_t readRangeContinuousMillimeters() { return read(); }
+
+    static String rangeStatusToString(RangeStatus status);
 
     inline void setTimeout(uint16_t timeout) { io_timeout = timeout; }
-    inline uint16_t getTimeout(void) { return io_timeout; }
-    bool timeoutOccurred(void);
+    inline uint16_t getTimeout() { return io_timeout; }
+    bool timeoutOccurred();
 
   private:
 
     // The Arduino two-wire interface uses a 7-bit number for the address,
     // and sets the last bit correctly based on reads and writes
     static const uint8_t AddressDefault = 0b0101001;
+
+    // value used in measurement timing budget calculations
+    // assumes PresetMode is LOWPOWER_AUTONOMOUS
+    //
+    // vhv = LOWPOWER_AUTO_VHV_LOOP_DURATION_US + LOWPOWERAUTO_VHV_LOOP_BOUND
+    //       (tuning parm default) * LOWPOWER_AUTO_VHV_LOOP_DURATION_US
+    //     = 245 + 3 * 245 = 980
+    // TimingGuard = LOWPOWER_AUTO_OVERHEAD_BEFORE_A_RANGING +
+    //               LOWPOWER_AUTO_OVERHEAD_BETWEEN_A_B_RANGING + vhv
+    //             = 1448 + 2100 + 980 = 4528
+    static const uint32_t TimingGuard = 4528;
 
     // value in DSS_CONFIG__TARGET_TOTAL_RATE_MCPS register, used in DSS
     // calculations
@@ -1337,6 +1344,7 @@ class VL53L1X
     ResultBuffer results;
 
     uint8_t address;
+
     uint16_t io_timeout;
     bool did_timeout;
     uint16_t timeout_start_ms;
@@ -1348,22 +1356,16 @@ class VL53L1X
     uint8_t saved_vhv_init;
     uint8_t saved_vhv_timeout;
 
-    //uint8_t stop_variable; // read by init and used when starting measurement; is StopVariable field of VL53L0X_DevData_t structure in API
-    //uint32_t measurement_timing_budget_us;
-
-    //bool getSpadInfo(uint8_t * count, bool * type_is_aperture);
-
-    //void getSequenceStepEnables(SequenceStepEnables * enables);
-    //void getSequenceStepTimeouts(SequenceStepEnables const * enables, SequenceStepTimeouts * timeouts);
-
-    //bool performSingleRefCalibration(uint8_t vhv_init_byte);
+    DistanceMode distance_mode;
 
     void setupManualCalibration();
     void readResults();
     void updateDSS();
-    void getRangingDetails(RangingDetails * details);
+    void getRangingData();
 
+    static uint32_t decodeTimeout(uint16_t reg_val);
     static uint16_t encodeTimeout(uint32_t timeout_mclks);
+    static uint32_t timeoutMclksToMicroseconds(uint32_t timeout_mclks, uint32_t macro_period_us);
     static uint32_t timeoutMicrosecondsToMclks(uint32_t timeout_us, uint32_t macro_period_us);
     uint32_t calcMacroPeriod(uint8_t vcsel_period);
 };
