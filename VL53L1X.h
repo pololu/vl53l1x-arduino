@@ -1292,7 +1292,7 @@ class VL53L1X
     void startContinuous(uint32_t period_ms);
     void stopContinuous();
     uint16_t read(bool blocking = true);
-    uint16_t readRangeContinuousMillimeters(bool blocking) { return read(blocking); } // alias of read()
+    uint16_t readRangeContinuousMillimeters(bool blocking = true) { return read(blocking); } // alias of read()
 
     // check if sensor has new reading available
     // assumes interrupt is active low (GPIO_HV_MUX__CTRL bit 4 is 1)
