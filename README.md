@@ -76,7 +76,7 @@ This library is intended to provide a quicker and easier way to get started usin
   * `uint16_t range_mm`<br>
     Range reading from the last measurement, in millimeters. (This reading can also be obtained as the return value of `read()`.)
   * `RangeStatus range_status`<br>
-    Status of the last measurement; see the definition of the RangeStatus enumeration type in VL53L1X.h (or the API user manual and source code) for descriptions of the possible statuses. A status of `VL53L1X::RangeValid` means there were no problems with the measurement.
+    Status of the last measurement; see the definition of the `RangeStatus` enumeration type in VL53L1X.h (or the API user manual and source code) for descriptions of the possible statuses. A status of `VL53L1X::RangeValid` means there were no problems with the measurement.
   * `float peak_signal_count_rate_MCPS`<br>
     Peak signal count rate of the last measurement, in units of mega counts per second.
   * `float ambient_count_rate_MCPS`<br>
