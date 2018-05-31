@@ -46,6 +46,9 @@ void VL53L1X::setAddress(uint8_t new_addr)
 // mode.
 bool VL53L1X::init(bool io_2v8)
 {
+  // check model ID and module type registers (values specified in datasheet)
+  if (readReg16Bit(IDENTIFICATION__MODEL_ID) != 0xEACC) { return false; }
+
   // VL53L1_software_reset() begin
 
   writeReg(SOFT_RESET, 0x00);
