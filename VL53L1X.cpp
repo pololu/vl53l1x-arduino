@@ -6,19 +6,6 @@
 #include <VL53L1X.h>
 #include <Wire.h>
 
-// Defines /////////////////////////////////////////////////////////////////////
-
-// Record the current time to check an upcoming timeout against
-#define startTimeout() (timeout_start_ms = millis())
-
-// Check if timeout is enabled (set to nonzero value) and has expired
-#define checkTimeoutExpired() \
-  (io_timeout > 0 && ((uint16_t)millis() - timeout_start_ms) > io_timeout)
-
-// Convert count rate from fixed point 9.7 format to float
-#define countRateFixedToFloat(count_rate_fixed) \
-  (float)(count_rate_fixed) / (1 << 7)
-
 // Constructors ////////////////////////////////////////////////////////////////
 
 VL53L1X::VL53L1X()
@@ -440,20 +427,22 @@ void VL53L1X::stopContinuous()
 // Returns a range reading in millimeters when continuous mode is active
 // (readRangeSingleMillimeters() also calls this function after starting a
 // single-shot range measurement)
-uint16_t VL53L1X::read()
+uint16_t VL53L1X::read(bool blocking)
 {
-  startTimeout();
-  // assumes interrupt is active low (GPIO_HV_MUX__CTRL bit 4 is 1)
-  while ((readReg(GPIO__TIO_HV_STATUS) & 0x01) == 1)
+  if (blocking)
   {
-    if (checkTimeoutExpired())
+    startTimeout();
+    while (!dataReady())
     {
-      did_timeout = true;
-      ranging_data.range_status = None;
-      ranging_data.range_mm = 0;
-      ranging_data.peak_signal_count_rate_MCPS = 0;
-      ranging_data.ambient_count_rate_MCPS = 0;
-      return ranging_data.range_mm;
+      if (checkTimeoutExpired())
+      {
+        did_timeout = true;
+        ranging_data.range_status = None;
+        ranging_data.range_mm = 0;
+        ranging_data.peak_signal_count_rate_MCPS = 0;
+        ranging_data.ambient_count_rate_MCPS = 0;
+        return ranging_data.range_mm;
+      }
     }
   }
 
@@ -474,48 +463,53 @@ uint16_t VL53L1X::read()
   return ranging_data.range_mm;
 }
 
-String VL53L1X::rangeStatusToString(RangeStatus status)
+// convert a RangeStatus to a readable string
+// Note that on an AVR, these strings are stored in RAM (dynamic memory), which
+// makes working with them easier but uses up 200+ bytes of RAM (many AVR-based
+// Arduinos only have about 2000 bytes of RAM). You can avoid this memory usage
+// if you do not call this function in your sketch.
+const char * VL53L1X::rangeStatusToString(RangeStatus status)
 {
   switch (status)
   {
     case RangeValid:
-      return F("range valid");
+      return "range valid";
 
     case SigmaFail:
-      return F("sigma fail");
+      return "sigma fail";
 
     case SignalFail:
-      return F("signal fail");
+      return "signal fail";
 
     case RangeValidMinRangeClipped:
-      return F("range valid, min range clipped");
+      return "range valid, min range clipped";
 
     case OutOfBoundsFail:
-      return F("out of bounds fail");
+      return "out of bounds fail";
 
     case HardwareFail:
-      return F("hardware fail");
+      return "hardware fail";
 
     case RangeValidNoWrapCheckFail:
-      return F("range valid, no wrap check fail");
+      return "range valid, no wrap check fail";
 
     case WrapTargetFail:
-      return F("wrap target fail");
+      return "wrap target fail";
 
     case XtalkSignalFail:
-      return F("xtalk signal fail");
+      return "xtalk signal fail";
 
-    case SyncronisationInt:
-      return F("syncronisation int");
+    case SynchronizationInt:
+      return "synchronization int";
 
     case MinRangeFail:
-      return F("min range fail");
+      return "min range fail";
 
     case None:
-      return F("no update");
+      return "no update";
 
     default:
-      return F("unknown status");
+      return "unknown status";
   }
 }
 
@@ -669,7 +663,7 @@ void VL53L1X::getRangingData()
       break;
 
     case 18: // GPHSTREAMCOUNT0READY
-      ranging_data.range_status = SyncronisationInt;
+      ranging_data.range_status = SynchronizationInt;
       break;
 
     case 5: // RANGEPHASECHECK

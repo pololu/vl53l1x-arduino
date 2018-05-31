@@ -111,17 +111,17 @@ class VL53L1X
       DSS_CONFIG__APERTURE_ATTENUATION                                           = 0x0057,
       DSS_CONFIG__MAX_SPADS_LIMIT                                                = 0x0058,
       DSS_CONFIG__MIN_SPADS_LIMIT                                                = 0x0059,
-      MM_CONFIG__TIMEOUT_MACROP_A                                                = 0x005A, // added by Pololu for 16-bit accesses 
+      MM_CONFIG__TIMEOUT_MACROP_A                                                = 0x005A, // added by Pololu for 16-bit accesses
       MM_CONFIG__TIMEOUT_MACROP_A_HI                                             = 0x005A,
       MM_CONFIG__TIMEOUT_MACROP_A_LO                                             = 0x005B,
-      MM_CONFIG__TIMEOUT_MACROP_B                                                = 0x005C, // added by Pololu for 16-bit accesses 
+      MM_CONFIG__TIMEOUT_MACROP_B                                                = 0x005C, // added by Pololu for 16-bit accesses
       MM_CONFIG__TIMEOUT_MACROP_B_HI                                             = 0x005C,
       MM_CONFIG__TIMEOUT_MACROP_B_LO                                             = 0x005D,
-      RANGE_CONFIG__TIMEOUT_MACROP_A                                             = 0x005E, // added by Pololu for 16-bit accesses 
+      RANGE_CONFIG__TIMEOUT_MACROP_A                                             = 0x005E, // added by Pololu for 16-bit accesses
       RANGE_CONFIG__TIMEOUT_MACROP_A_HI                                          = 0x005E,
       RANGE_CONFIG__TIMEOUT_MACROP_A_LO                                          = 0x005F,
       RANGE_CONFIG__VCSEL_PERIOD_A                                               = 0x0060,
-      RANGE_CONFIG__TIMEOUT_MACROP_B                                             = 0x0061, // added by Pololu for 16-bit accesses 
+      RANGE_CONFIG__TIMEOUT_MACROP_B                                             = 0x0061, // added by Pololu for 16-bit accesses
       RANGE_CONFIG__TIMEOUT_MACROP_B_HI                                          = 0x0061,
       RANGE_CONFIG__TIMEOUT_MACROP_B_LO                                          = 0x0062,
       RANGE_CONFIG__VCSEL_PERIOD_B                                               = 0x0063,
@@ -1238,7 +1238,7 @@ class VL53L1X
       // "1st interrupt when starting ranging in back to back mode. Ignore
       // data."
       // should never occur with this lib
-      SyncronisationInt         =  10, // (this is how it's spelled in the API)
+      SynchronizationInt         =  10, // (the API spells this "syncronisation")
 
       // "All Range ok but object is result of multiple pulses merging together.
       // Used by RQL for merged pulse detection"
@@ -1272,7 +1272,7 @@ class VL53L1X
     VL53L1X();
 
     void setAddress(uint8_t new_addr);
-    inline uint8_t getAddress() { return address; }
+    uint8_t getAddress() { return address; }
 
     bool init(bool io_2v8 = true);
 
@@ -1291,13 +1291,17 @@ class VL53L1X
 
     void startContinuous(uint32_t period_ms);
     void stopContinuous();
-    uint16_t read();
-    inline uint16_t readRangeContinuousMillimeters() { return read(); }
+    uint16_t read(bool blocking = true);
+    uint16_t readRangeContinuousMillimeters(bool blocking) { return read(blocking); } // alias of read()
 
-    static String rangeStatusToString(RangeStatus status);
+    // check if sensor has new reading available
+    // assumes interrupt is active low (GPIO_HV_MUX__CTRL bit 4 is 1)
+    bool dataReady() { return (readReg(GPIO__TIO_HV_STATUS) & 0x01) == 0; }
 
-    inline void setTimeout(uint16_t timeout) { io_timeout = timeout; }
-    inline uint16_t getTimeout() { return io_timeout; }
+    static const char * rangeStatusToString(RangeStatus status);
+
+    void setTimeout(uint16_t timeout) { io_timeout = timeout; }
+    uint16_t getTimeout() { return io_timeout; }
     bool timeoutOccurred();
 
   private:
@@ -1358,6 +1362,12 @@ class VL53L1X
 
     DistanceMode distance_mode;
 
+    // Record the current time to check an upcoming timeout against
+    void startTimeout() { timeout_start_ms = millis(); }
+
+    // Check if timeout is enabled (set to nonzero value) and has expired
+    bool checkTimeoutExpired() {return (io_timeout > 0) && ((uint16_t)(millis() - timeout_start_ms) > io_timeout); }
+
     void setupManualCalibration();
     void readResults();
     void updateDSS();
@@ -1368,7 +1378,7 @@ class VL53L1X
     static uint32_t timeoutMclksToMicroseconds(uint32_t timeout_mclks, uint32_t macro_period_us);
     static uint32_t timeoutMicrosecondsToMclks(uint32_t timeout_us, uint32_t macro_period_us);
     uint32_t calcMacroPeriod(uint8_t vcsel_period);
+
+    // Convert count rate from fixed point 9.7 format to float
+    float countRateFixedToFloat(uint16_t count_rate_fixed) { return (float)count_rate_fixed / (1 << 7); }
 };
-
-
-
