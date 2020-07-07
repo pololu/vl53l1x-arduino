@@ -681,7 +681,7 @@ void VL53L1X::getRangingData()
       break;
 
     case 6: // SIGMATHRESHOLDCHECK
-      ranging_data.range_status = SignalFail;
+      ranging_data.range_status = SigmaFail;
       break;
 
     case 7: // PHASECONSISTENCY
