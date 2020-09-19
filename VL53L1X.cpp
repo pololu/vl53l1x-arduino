@@ -430,9 +430,11 @@ void VL53L1X::stopContinuous()
   // VL53L1_low_power_auto_data_stop_range() end
 }
 
-// Returns a range reading in millimeters when continuous mode is active
-// (readRangeSingleMillimeters() also calls this function after starting a
-// single-shot range measurement)
+// Returns a range reading in millimeters when continuous mode is active. If
+// blocking is true (the default), this function waits for a new measurement to
+// be available. If blocking is false, it will try to return data immediately.
+// (readSingle() also calls this function after starting a single-shot range
+// measurement)
 uint16_t VL53L1X::read(bool blocking)
 {
   if (blocking)
@@ -443,11 +445,7 @@ uint16_t VL53L1X::read(bool blocking)
       if (checkTimeoutExpired())
       {
         did_timeout = true;
-        ranging_data.range_status = None;
-        ranging_data.range_mm = 0;
-        ranging_data.peak_signal_count_rate_MCPS = 0;
-        ranging_data.ambient_count_rate_MCPS = 0;
-        return ranging_data.range_mm;
+        return 0;
       }
     }
   }
@@ -467,6 +465,24 @@ uint16_t VL53L1X::read(bool blocking)
   writeReg(SYSTEM__INTERRUPT_CLEAR, 0x01); // sys_interrupt_clear_range
 
   return ranging_data.range_mm;
+}
+
+// Starts a single-shot range measurement. If blocking is true (the default),
+// this function waits for the measurement to finish and returns the reading.
+// Otherwise, it returns 0 immediately.
+uint16_t VL53L1X::readSingle(bool blocking)
+{
+  writeReg(SYSTEM__INTERRUPT_CLEAR, 0x01); // sys_interrupt_clear_range
+  writeReg(SYSTEM__MODE_START, 0x10); // mode_range__single_shot
+
+  if (blocking)
+  {
+    return read(true);
+  }
+  else
+  {
+    return 0;
+  }
 }
 
 // convert a RangeStatus to a readable string

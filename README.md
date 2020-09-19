@@ -139,17 +139,25 @@ This library is intended to provide a quicker and easier way to get started usin
 * `uint16_t read(bool blocking = true)`<br>
   After continuous ranging measurements have been started, calling this function returns a range reading in millimeters and updates the `ranging_data` struct with details about the last measurement. If the optional argument `blocking` is true (the default if not specified), this function will wait until data from a new measurement is available before returning.
 
-  If you do not want this function to block, you can use the `dataReady()` function to check if new data is available before calling `read(false)`. Calling `read(false)` before new data is available will return a reading of 0, and `ranging_data.range_status` will have the value `VL53L1X::None`, indicating that there has been no update.
+  If you do not want this function to block, you can use the `dataReady()` function to check if new data is available before calling `read(false)`. Calling `read(false)` before new data is available results in undefined behavior.
 
 * `uint16_t readRangeContinuousMillimeters(bool blocking = true)`<br>
   Alias of `read()` for convenience.
+
+* `uint16_t readSingle(bool blocking = true)`<br>
+  Starts a single-shot ranging measurement. If the optional argument `blocking` is true (the default if not specified), this function will wait until data from the measurement is available before returning and updating  `ranging_data`. Otherwise, this function returns 0 immediately.
+
+  To perform a single non-blocking read, you can call `readSingle(false)` to start the measurement, use `dataReady()` to wait until data is available, and finally call `read(false)` to get the data.
+
+* `uint16_t readRangeSingleMillimeters(bool blocking = true)`<br>
+  Alias of `readSingle()` for convenience.
 
 * `bool dataReady()`<br>
   Returns a boolean indicating whether data from a new measurement is available from the sensor.
 
 * `static const char * rangeStatusToString(RangeStatus status)`<br>
   Converts a `RangeStatus` into a readable string describing that status.
-  
+
   Note that on an AVR, the strings in this function are stored in RAM (dynamic memory), which makes working with them easier but uses up 200+ bytes of RAM (many AVR-based Arduinos only have about 2000 bytes of RAM). You can avoid this memory usage if you do not call this function in your sketch.
 
 * `void setTimeout(uint16_t timeout)`<br>
