@@ -172,8 +172,8 @@ This library is intended to provide a quicker and easier way to get started usin
 ## Version history
 
 * 1.1.0 (2020-09-21):
-** Added support for single-shot range measurements.
-** Changed timeout behavior on blocking reads to not clear `ranging_data`.
-** Fixed an incorrect error status returned by `getRangingData()`. (thanks rejnok93)
+  * Added support for single-shot range measurements.
+  * Changed timeout behavior on blocking reads to not clear `ranging_data`.
+  * Fixed an incorrect error status returned by `getRangingData()`. (thanks rejnok93)
 * 1.0.1 (2018-09-19): Fix Arduino 101 hanging in init().
 * 1.0.0 (2018-05-31): Original release.
