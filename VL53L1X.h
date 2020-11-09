@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 
+class TwoWire;	// from Wire.h
+
 class VL53L1X
 {
   public:
@@ -1271,6 +1273,8 @@ class VL53L1X
 
     VL53L1X();
 
+    void setWire(TwoWire* new_wire);
+
     void setAddress(uint8_t new_addr);
     uint8_t getAddress() { return address; }
 
@@ -1343,6 +1347,8 @@ class VL53L1X
       uint16_t final_crosstalk_corrected_range_mm_sd0;
       uint16_t peak_signal_count_rate_crosstalk_corrected_mcps_sd0;
     };
+
+    TwoWire* wire;
 
     // making this static would save RAM for multiple instances as long as there
     // aren't multiple sensors being read at the same time (e.g. on separate

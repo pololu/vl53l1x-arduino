@@ -88,6 +88,9 @@ This library is intended to provide a quicker and easier way to get started usin
 * `VL53L1X()`<br>
   Constructor.
 
+* `void setWire(TwoWire* new_wire)`<br>
+  Set TwoWire instance. By default, the global `Wire` instance is used.
+
 * `void setAddress(uint8_t new_addr)`<br>
   Changes the I&sup2;C slave device address of the VL53L1X to the given value (7-bit).
 
