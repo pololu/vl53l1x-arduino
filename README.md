@@ -88,8 +88,11 @@ This library is intended to provide a quicker and easier way to get started usin
 * `VL53L1X()`<br>
   Constructor.
 
-* `void setWire(TwoWire* new_wire)`<br>
-  Set TwoWire instance. By default, the global `Wire` instance is used.
+* void setBus(TwoWire * bus)
+  Configures this object to use the specified I²C bus. bus should be a pointer to a TwoWire object; the default bus is Wire, which is typically the first or only I²C bus on an Arduino. If your Arduino has more than one I²C bus and you have the VL53L1X connected to the second bus, which is typically called Wire1, you can call sensor.setBus(&Wire1);.
+
+* TwoWire * getBus()
+  Returns a pointer to the I²C bus this object is using.
 
 * `void setAddress(uint8_t new_addr)`<br>
   Changes the I&sup2;C slave device address of the VL53L1X to the given value (7-bit).

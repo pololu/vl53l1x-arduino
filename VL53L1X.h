@@ -1273,7 +1273,8 @@ class VL53L1X
 
     VL53L1X();
 
-    void setWire(TwoWire* new_wire);
+    void setBus(TwoWire * bus) { this->bus = bus; }
+    TwoWire * getBus() { return bus; }
 
     void setAddress(uint8_t new_addr);
     uint8_t getAddress() { return address; }
@@ -1348,12 +1349,12 @@ class VL53L1X
       uint16_t peak_signal_count_rate_crosstalk_corrected_mcps_sd0;
     };
 
-    TwoWire* wire;
-
     // making this static would save RAM for multiple instances as long as there
     // aren't multiple sensors being read at the same time (e.g. on separate
     // I2C buses)
     ResultBuffer results;
+
+    TwoWire * bus;
 
     uint8_t address;
 

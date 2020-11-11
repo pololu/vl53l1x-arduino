@@ -10,9 +10,9 @@
 
 VL53L1X::VL53L1X()
 #if !defined(NO_GLOBAL_INSTANCES) && !defined(NO_GLOBAL_TWOWIRE)
-  : wire(&Wire)
+  : bus(&Wire)
 #else
-  : wire(nullptr)
+  : bus(nullptr)
 #endif
   , address(AddressDefault)
   , io_timeout(0) // no timeout
@@ -25,11 +25,6 @@ VL53L1X::VL53L1X()
 }
 
 // Public Methods //////////////////////////////////////////////////////////////
-
-void VL53L1X::setWire(TwoWire* new_wire)
-{
-  wire = new_wire;
-}
 
 void VL53L1X::setAddress(uint8_t new_addr)
 {
@@ -167,35 +162,35 @@ bool VL53L1X::init(bool io_2v8)
 // Write an 8-bit register
 void VL53L1X::writeReg(uint16_t reg, uint8_t value)
 {
-  wire->beginTransmission(address);
-  wire->write((reg >> 8) & 0xFF); // reg high byte
-  wire->write( reg       & 0xFF); // reg low byte
-  wire->write(value);
-  last_status = wire->endTransmission();
+  bus->beginTransmission(address);
+  bus->write((reg >> 8) & 0xFF); // reg high byte
+  bus->write( reg       & 0xFF); // reg low byte
+  bus->write(value);
+  last_status = bus->endTransmission();
 }
 
 // Write a 16-bit register
 void VL53L1X::writeReg16Bit(uint16_t reg, uint16_t value)
 {
-  wire->beginTransmission(address);
-  wire->write((reg >> 8) & 0xFF); // reg high byte
-  wire->write( reg       & 0xFF); // reg low byte
-  wire->write((value >> 8) & 0xFF); // value high byte
-  wire->write( value       & 0xFF); // value low byte
-  last_status = wire->endTransmission();
+  bus->beginTransmission(address);
+  bus->write((reg >> 8) & 0xFF); // reg high byte
+  bus->write( reg       & 0xFF); // reg low byte
+  bus->write((value >> 8) & 0xFF); // value high byte
+  bus->write( value       & 0xFF); // value low byte
+  last_status = bus->endTransmission();
 }
 
 // Write a 32-bit register
 void VL53L1X::writeReg32Bit(uint16_t reg, uint32_t value)
 {
-  wire->beginTransmission(address);
-  wire->write((reg >> 8) & 0xFF); // reg high byte
-  wire->write( reg       & 0xFF); // reg low byte
-  wire->write((value >> 24) & 0xFF); // value highest byte
-  wire->write((value >> 16) & 0xFF);
-  wire->write((value >>  8) & 0xFF);
-  wire->write( value        & 0xFF); // value lowest byte
-  last_status = wire->endTransmission();
+  bus->beginTransmission(address);
+  bus->write((reg >> 8) & 0xFF); // reg high byte
+  bus->write( reg       & 0xFF); // reg low byte
+  bus->write((value >> 24) & 0xFF); // value highest byte
+  bus->write((value >> 16) & 0xFF);
+  bus->write((value >>  8) & 0xFF);
+  bus->write( value        & 0xFF); // value lowest byte
+  last_status = bus->endTransmission();
 }
 
 // Read an 8-bit register
@@ -203,13 +198,13 @@ uint8_t VL53L1X::readReg(regAddr reg)
 {
   uint8_t value;
 
-  wire->beginTransmission(address);
-  wire->write((reg >> 8) & 0xFF); // reg high byte
-  wire->write( reg       & 0xFF); // reg low byte
-  last_status = wire->endTransmission();
+  bus->beginTransmission(address);
+  bus->write((reg >> 8) & 0xFF); // reg high byte
+  bus->write( reg       & 0xFF); // reg low byte
+  last_status = bus->endTransmission();
 
-  wire->requestFrom(address, (uint8_t)1);
-  value = wire->read();
+  bus->requestFrom(address, (uint8_t)1);
+  value = bus->read();
 
   return value;
 }
@@ -219,14 +214,14 @@ uint16_t VL53L1X::readReg16Bit(uint16_t reg)
 {
   uint16_t value;
 
-  wire->beginTransmission(address);
-  wire->write((reg >> 8) & 0xFF); // reg high byte
-  wire->write( reg       & 0xFF); // reg low byte
-  last_status = wire->endTransmission();
+  bus->beginTransmission(address);
+  bus->write((reg >> 8) & 0xFF); // reg high byte
+  bus->write( reg       & 0xFF); // reg low byte
+  last_status = bus->endTransmission();
 
-  wire->requestFrom(address, (uint8_t)2);
-  value  = (uint16_t)wire->read() << 8; // value high byte
-  value |=           wire->read();      // value low byte
+  bus->requestFrom(address, (uint8_t)2);
+  value  = (uint16_t)bus->read() << 8; // value high byte
+  value |=           bus->read();      // value low byte
 
   return value;
 }
@@ -236,16 +231,16 @@ uint32_t VL53L1X::readReg32Bit(uint16_t reg)
 {
   uint32_t value;
 
-  wire->beginTransmission(address);
-  wire->write((reg >> 8) & 0xFF); // reg high byte
-  wire->write( reg       & 0xFF); // reg low byte
-  last_status = wire->endTransmission();
+  bus->beginTransmission(address);
+  bus->write((reg >> 8) & 0xFF); // reg high byte
+  bus->write( reg       & 0xFF); // reg low byte
+  last_status = bus->endTransmission();
 
-  wire->requestFrom(address, (uint8_t)4);
-  value  = (uint32_t)wire->read() << 24; // value highest byte
-  value |= (uint32_t)wire->read() << 16;
-  value |= (uint16_t)wire->read() <<  8;
-  value |=           wire->read();       // value lowest byte
+  bus->requestFrom(address, (uint8_t)4);
+  value  = (uint32_t)bus->read() << 24; // value highest byte
+  value |= (uint32_t)bus->read() << 16;
+  value |= (uint16_t)bus->read() <<  8;
+  value |=           bus->read();       // value lowest byte
 
   return value;
 }
@@ -580,39 +575,39 @@ void VL53L1X::setupManualCalibration()
 // read measurement results into buffer
 void VL53L1X::readResults()
 {
-  wire->beginTransmission(address);
-  wire->write((RESULT__RANGE_STATUS >> 8) & 0xFF); // reg high byte
-  wire->write( RESULT__RANGE_STATUS       & 0xFF); // reg low byte
-  last_status = wire->endTransmission();
+  bus->beginTransmission(address);
+  bus->write((RESULT__RANGE_STATUS >> 8) & 0xFF); // reg high byte
+  bus->write( RESULT__RANGE_STATUS       & 0xFF); // reg low byte
+  last_status = bus->endTransmission();
 
-  wire->requestFrom(address, (uint8_t)17);
+  bus->requestFrom(address, (uint8_t)17);
 
-  results.range_status = wire->read();
+  results.range_status = bus->read();
 
-  wire->read(); // report_status: not used
+  bus->read(); // report_status: not used
 
-  results.stream_count = wire->read();
+  results.stream_count = bus->read();
 
-  results.dss_actual_effective_spads_sd0  = (uint16_t)wire->read() << 8; // high byte
-  results.dss_actual_effective_spads_sd0 |=           wire->read();      // low byte
+  results.dss_actual_effective_spads_sd0  = (uint16_t)bus->read() << 8; // high byte
+  results.dss_actual_effective_spads_sd0 |=           bus->read();      // low byte
 
-  wire->read(); // peak_signal_count_rate_mcps_sd0: not used
-  wire->read();
+  bus->read(); // peak_signal_count_rate_mcps_sd0: not used
+  bus->read();
 
-  results.ambient_count_rate_mcps_sd0  = (uint16_t)wire->read() << 8; // high byte
-  results.ambient_count_rate_mcps_sd0 |=           wire->read();      // low byte
+  results.ambient_count_rate_mcps_sd0  = (uint16_t)bus->read() << 8; // high byte
+  results.ambient_count_rate_mcps_sd0 |=           bus->read();      // low byte
 
-  wire->read(); // sigma_sd0: not used
-  wire->read();
+  bus->read(); // sigma_sd0: not used
+  bus->read();
 
-  wire->read(); // phase_sd0: not used
-  wire->read();
+  bus->read(); // phase_sd0: not used
+  bus->read();
 
-  results.final_crosstalk_corrected_range_mm_sd0  = (uint16_t)wire->read() << 8; // high byte
-  results.final_crosstalk_corrected_range_mm_sd0 |=           wire->read();      // low byte
+  results.final_crosstalk_corrected_range_mm_sd0  = (uint16_t)bus->read() << 8; // high byte
+  results.final_crosstalk_corrected_range_mm_sd0 |=           bus->read();      // low byte
 
-  results.peak_signal_count_rate_crosstalk_corrected_mcps_sd0  = (uint16_t)wire->read() << 8; // high byte
-  results.peak_signal_count_rate_crosstalk_corrected_mcps_sd0 |=           wire->read();      // low byte
+  results.peak_signal_count_rate_crosstalk_corrected_mcps_sd0  = (uint16_t)bus->read() << 8; // high byte
+  results.peak_signal_count_rate_crosstalk_corrected_mcps_sd0 |=           bus->read();      // low byte
 }
 
 // perform Dynamic SPAD Selection calculation/update
