@@ -177,8 +177,7 @@ This library is intended to provide a quicker and easier way to get started usin
 
 ## Version history
 
-* 1.2.0 (2020-11-13):
-  * Added support for alternative I&sup2;C buses (thanks mampfes).
+* 1.2.0 (2020-11-13): Added support for alternative I&sup2;C buses (thanks mampfes).
 * 1.1.0 (2020-09-21):
   * Added support for single-shot range measurements.
   * Changed timeout behavior on blocking reads to not clear `ranging_data`.
