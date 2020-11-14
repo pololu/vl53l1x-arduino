@@ -1,5 +1,7 @@
 VL53L1X	KEYWORD1
 
+setBus	KEYWORD2
+getBus	KEYWORD2
 setAddress	KEYWORD2
 getAddress	KEYWORD2
 init	KEYWORD2

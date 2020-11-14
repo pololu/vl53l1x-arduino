@@ -1,7 +1,7 @@
 # VL53L1X library for Arduino
 
-Version: 1.1.0<br>
-Release date: 2020-09-21<br>
+Version: 1.2.0<br>
+Release date: 2020-11-13<br>
 [![Build Status](https://travis-ci.org/pololu/vl53l1x-arduino.svg?branch=master)](https://travis-ci.org/pololu/vl53l1x-arduino)<br>
 [www.pololu.com](https://www.pololu.com/)
 
@@ -89,10 +89,10 @@ This library is intended to provide a quicker and easier way to get started usin
   Constructor.
 
 * void setBus(TwoWire * bus)
-  Configures this object to use the specified I²C bus. bus should be a pointer to a TwoWire object; the default bus is Wire, which is typically the first or only I²C bus on an Arduino. If your Arduino has more than one I²C bus and you have the VL53L1X connected to the second bus, which is typically called Wire1, you can call sensor.setBus(&Wire1);.
+  Configures this object to use the specified I&sup2;C bus. `bus` should be a pointer to a `TwoWire` object; the default bus is `Wire`, which is typically the first or only I&sup2;C bus on an Arduino. If your Arduino has more than one I&sup2;C bus and you have the VL53L0X connected to the second bus, which is typically called `Wire1`, you can call `sensor.setBus(&Wire1);`.
 
 * TwoWire * getBus()
-  Returns a pointer to the I²C bus this object is using.
+  Returns a pointer to the I&sup2;C bus this object is using.
 
 * `void setAddress(uint8_t new_addr)`<br>
   Changes the I&sup2;C slave device address of the VL53L1X to the given value (7-bit).
@@ -177,6 +177,8 @@ This library is intended to provide a quicker and easier way to get started usin
 
 ## Version history
 
+* 1.2.0 (2020-11-13):
+  * Added support for alternative I&sup2;C buses (thanks mampfes).
 * 1.1.0 (2020-09-21):
   * Added support for single-shot range measurements.
   * Changed timeout behavior on blocking reads to not clear `ranging_data`.
