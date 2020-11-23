@@ -1,8 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
-
-class TwoWire;	// from Wire.h
+#include <Wire.h>
 
 class VL53L1X
 {
