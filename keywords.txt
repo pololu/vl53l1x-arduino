@@ -15,6 +15,10 @@ setDistanceMode	KEYWORD2
 getDistanceMode	KEYWORD2
 setMeasurementTimingBudget	KEYWORD2
 getMeasurementTimingBudget	KEYWORD2
+setROISize	KEYWORD2
+getROISize	KEYWORD2
+setROICenter	KEYWORD2
+getROICenter	KEYWORD2
 startContinuous	KEYWORD2
 stopContinuous	KEYWORD2
 read	KEYWORD2

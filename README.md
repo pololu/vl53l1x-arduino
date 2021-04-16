@@ -1,7 +1,7 @@
 # VL53L1X library for Arduino
 
-Version: 1.2.1<br>
-Release date: 2020-11-23<br>
+Version: 1.3.0<br>
+Release date: 2021-04-16<br>
 [www.pololu.com](https://www.pololu.com/)
 
 ## Summary
@@ -135,6 +135,18 @@ This library is intended to provide a quicker and easier way to get started usin
 * `uint32_t getMeasurementTimingBudget()`<br>
   Returns the current measurement timing budget in microseconds.
 
+* `void setROISize(uint8_t width, uint8_t height)`<br>
+  Changes the size of the sensor's region of interest (ROI), allowing a smaller field of view (FoV) to be configured at the cost of losing some sensitivity. The default and maximum ROI is 16x16, which covers the VL53L1X's full array of sensing elements (single-photon avalanche diodes, or SPADs). The minimum ROI is 4x4. See the datasheet and ST user manual [UM2555](https://www.st.com/resource/en/user_manual/dm00600212-vl53l1x-ultra-lite-driver-multiple-zone-implementation-stmicroelectronics.pdf) for more information.
+
+* `void getROISize(uint8_t * width, uint8_t * height)`<br>
+  Retrieves the size of the sensor's currently configured ROI. This function takes pointers to two `uint8_t`s and copies the width and height values to those locations.
+
+* `void setROICenter(uint8_t spadNum)`<br>
+  Sets the center of the sensor's ROI, allowing the sensor's FoV to be shifted off-center when a smaller FoV is configured. `spadNum` is the number of the selected center SPAD; information on selecting a SPAD number are in vl53l1x.cpp and [UM2555](https://www.st.com/resource/en/user_manual/dm00600212-vl53l1x-ultra-lite-driver-multiple-zone-implementation-stmicroelectronics.pdf). The default center SPAD is 199, which centers the sensor's FoV.
+
+* `uint8_t getROICenter()`<br>
+  Returns the number of the currently configured center SPAD, which determines the center of the sensor's ROI.
+
 * `void startContinuous(uint32_t period_ms)`<br>
   Starts continuous ranging measurements. The specified inter-measurement period in milliseconds determines how often the sensor takes a measurement; if it is shorter than the timing budget, the sensor will start a new measurement as soon as the previous one finishes.
 
@@ -176,6 +188,7 @@ This library is intended to provide a quicker and easier way to get started usin
 
 ## Version history
 
+* 1.3.0 (2021-04-16): Added functions to configure and retrieve a custom region of interest (ROI) for the VL53L1X.
 * 1.2.1 (2020-11-23): Fixed compile error on platforms where `TwoWire` isn't a class.
 * 1.2.0 (2020-11-13): Added support for alternative I&sup2;C buses (thanks mampfes).
 * 1.1.0 (2020-09-21):
