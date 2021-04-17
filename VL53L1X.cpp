@@ -404,18 +404,18 @@ uint32_t VL53L1X::getMeasurementTimingBudget()
 // reading that document carefully.
 void VL53L1X::setROISize(uint8_t width, uint8_t height)
 {
-	uint8_t optical_center = readReg(ROI_CONFIG__MODE_ROI_CENTRE_SPAD);
+  if ( width > 16) {  width = 16; }
+  if (height > 16) { height = 16; }
 
-	if ( width > 16) {  width = 16; }
-	if (height > 16) { height = 16; }
-
-	if (width > 10 || height > 10)
+  // Force ROI to be centered if width or height > 10, matching what the ULD API
+  // does. (This can probably be overridden by calling setROICenter()
+  // afterwards.)
+  if (width > 10 || height > 10)
   {
-		optical_center = 199;
-	}
+    writeReg(ROI_CONFIG__USER_ROI_CENTRE_SPAD, 199);
+  }
 
-	writeReg(ROI_CONFIG__USER_ROI_CENTRE_SPAD, optical_center);
-	writeReg(ROI_CONFIG__USER_ROI_REQUESTED_GLOBAL_XY_SIZE,
+  writeReg(ROI_CONFIG__USER_ROI_REQUESTED_GLOBAL_XY_SIZE,
            (height - 1) << 4 | (width - 1));
 }
 
@@ -423,9 +423,9 @@ void VL53L1X::setROISize(uint8_t width, uint8_t height)
 // based on VL53L1X_GetROI_XY() from STSW-IMG009 Ultra Lite Driver
 void VL53L1X::getROISize(uint8_t * width, uint8_t * height)
 {
-	uint8_t reg_val = readReg(ROI_CONFIG__USER_ROI_REQUESTED_GLOBAL_XY_SIZE);
-	*width = (reg_val & 0xF) + 1;
-	*height = (reg_val >> 4) + 1;
+  uint8_t reg_val = readReg(ROI_CONFIG__USER_ROI_REQUESTED_GLOBAL_XY_SIZE);
+  *width = (reg_val & 0xF) + 1;
+  *height = (reg_val >> 4) + 1;
 }
 
 // Set the center SPAD of the region of interest (ROI)
@@ -479,14 +479,14 @@ void VL53L1X::getROISize(uint8_t * width, uint8_t * height)
 // lower right.
 void VL53L1X::setROICenter(uint8_t spadNumber)
 {
-	writeReg(ROI_CONFIG__USER_ROI_CENTRE_SPAD, spadNumber);
+  writeReg(ROI_CONFIG__USER_ROI_CENTRE_SPAD, spadNumber);
 }
 
 // Get the center SPAD of the region of interest
 // based on VL53L1X_GetROICenter() from STSW-IMG009 Ultra Lite Driver
 uint8_t VL53L1X::getROICenter()
 {
-	return readReg(ROI_CONFIG__USER_ROI_CENTRE_SPAD);
+  return readReg(ROI_CONFIG__USER_ROI_CENTRE_SPAD);
 }
 
 // Start continuous ranging measurements, with the given inter-measurement
