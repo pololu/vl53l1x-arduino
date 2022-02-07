@@ -185,10 +185,10 @@ void VL53L1X::writeReg32Bit(uint16_t reg, uint32_t value)
   bus->beginTransmission(address);
   bus->write((reg >> 8) & 0xFF); // reg high byte
   bus->write( reg       & 0xFF); // reg low byte
-  bus->write((value >> 24) & 0xFF); // value highest byte
-  bus->write((value >> 16) & 0xFF);
-  bus->write((value >>  8) & 0xFF);
-  bus->write( value        & 0xFF); // value lowest byte
+  bus->write((uint8_t)(value >> 24) & 0xFF); // value highest byte
+  bus->write((uint8_t)(value >> 16) & 0xFF);
+  bus->write((uint8_t)(value >>  8) & 0xFF);
+  bus->write((uint8_t)(value)       & 0xFF); // value lowest byte
   last_status = bus->endTransmission();
 }
 
