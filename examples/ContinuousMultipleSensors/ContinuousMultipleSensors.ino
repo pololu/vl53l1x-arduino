@@ -15,14 +15,14 @@ well.
 // The number of sensors in your system.
 const uint8_t sensorCount = 3;
 
-// The Arduino pin connected to the XSHUT pin of each sensor. The first sensor
-// doesn't need XSHUT connected since we would just enable it right away.
+// The Arduino pin connected to the XSHUT pin of each sensor.
 const uint8_t xshutPins[sensorCount] = { 4, 5, 6 };
 
 VL53L1X sensors[sensorCount];
 
 void setup()
 {
+  while (!Serial) {}
   Serial.begin(115200);
   Wire.begin();
   Wire.setClock(400000); // use 400 kHz I2C

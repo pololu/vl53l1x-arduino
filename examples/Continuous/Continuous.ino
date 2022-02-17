@@ -10,6 +10,7 @@ VL53L1X sensor;
 
 void setup()
 {
+  while (!Serial) {}
   Serial.begin(115200);
   Wire.begin();
   Wire.setClock(400000); // use 400 kHz I2C
@@ -20,7 +21,7 @@ void setup()
     Serial.println("Failed to detect and initialize sensor!");
     while (1);
   }
-  
+
   // Use long distance mode and allow up to 50000 us (50 ms) for a measurement.
   // You can change these settings to adjust the performance of the sensor, but
   // the minimum timing budget is 20 ms for short distance mode and 33 ms for
